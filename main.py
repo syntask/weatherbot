@@ -7,6 +7,38 @@ sys.path.append(basedir)
 import threading
 import queue
 import requests
+import functools
+from typing import Callable, Tuple, Type
+
+
+def retry(max_attempts: int = 5, backoff_factor: float = 0.2, exceptions: Tuple[Type[BaseException], ...] = (Exception,)):
+    """Decorator to retry a function up to `max_attempts` with exponential backoff.
+
+    backoff_factor is the initial delay in seconds; delay doubles each retry.
+    ``exceptions`` is a tuple of exception classes that should trigger a retry.
+    """
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 1
+            delay = backoff_factor
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions:
+                    if attempt >= max_attempts:
+                        raise
+                    time.sleep(delay)
+                    delay *= 2
+                    attempt += 1
+        return wrapper
+    return decorator
+
+
+# A small wrapper around requests.get that will retry on request exceptions
+@retry(max_attempts=5, backoff_factor=0.2, exceptions=(requests.RequestException,))
+def _get(url, **kwargs):
+    return requests.get(url, **kwargs)
 
 def is_sim_mode() -> bool:
     if sys.platform.startswith("linux") and platform.machine().startswith(("arm", "aarch")):
@@ -66,9 +98,11 @@ weather_thumbnails = {
 
 weather_data = {}
 
+is_night = False
+
 fnt_dejavu_12 = ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 12)
 
-fnt_dejavu_22= ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 22)
+fnt_dejavu_22= ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 16)
 
 def draw_text(image, text, x, y, halign, valign, font):
     draw = ImageDraw.Draw(image)
@@ -102,32 +136,50 @@ def draw():
     global weather_data
     
     if "error" in weather_data:
-        draw_text(image, "Error fetching weather data:", 125, 30, "center", "top", fnt_dejavu_12)
-        draw_text(image, weather_data["error"], 125, 60, "center", "top", fnt_dejavu_12)
+        draw_text(image, "Error fetching weather data", 125, 61, "center", "middle", fnt_dejavu_12)
     else:
         weather_thumbnail = weather_thumbnails.get(weather_data.get("weather_code", 0), "clear-day")
-        image.paste(Image.open(f"{basedir}/assets/weather_thumbnails/{weather_thumbnail}.bmp"), (20, 20))
-        weather_str = f"{weather_data.get('temperature_2m', 'N/A')}{temp_str}\n{weather_data.get('windspeed_10m', 'N/A')} {wind_str}\n{weather_data.get('winddirection_10m', 'N/A')}°"
-        draw_text(image, weather_str, 112, 51, "left", "middle", fnt_dejavu_22)
+        if is_night:
+            weather_thumbnail = weather_thumbnail.replace("day", "night")
+        image.paste(Image.open(f"{basedir}/assets/weather_thumbnails/{weather_thumbnail}.bmp"), (10, 20))
+        weather_str_left = f"{int(round(weather_data.get('temperature_2m', 'N/A')))}{temp_str}\n{int(round(weather_data.get('windspeed_10m', 'N/A')))} {wind_str}\n{weather_data.get('winddirection_10m', 'N/A')}°"
+        draw_text(image, weather_str_left, 92, 51, "left", "middle", fnt_dejavu_22)
+        
+        weather_str_right = f"{int(round(weather_data.get('apparent_temperature', 'N/A')))}{temp_str}\n{int(round(weather_data.get('wind_gusts_10m', 'N/A')))} {wind_str}\n{int(round(weather_data.get('relative_humidity_2m', 'N/A')))}%"
+        draw_text(image, weather_str_right, 170, 51, "left", "middle", fnt_dejavu_22)
         
         draw_text(image, f"Updated at {datetime.datetime.now().strftime('%m/%d %H:%M')}", 125, 120, "center", "bottom", fnt_dejavu_12)
+        
+        if is_night:
+            # invert image
+            image = Image.eval(image, lambda x: 255 - x)
     return image
 
 def tick():
     # Fetch weather data
-    
     global weather_data
+    global is_night
+    
     try:
-        response = requests.get("https://api.open-meteo.com/v1/forecast", params={
+        response = _get("https://api.open-meteo.com/v1/forecast", params={
             "latitude": 44.9833,
             "longitude": -93.2667,
             "current": "weather_code,temperature_2m,apparent_temperature,relative_humidity_2m,windspeed_10m,wind_gusts_10m,winddirection_10m",
             "wind_speed_unit": wind_unit,
-            "temperature_unit": temp_unit
+            "temperature_unit": temp_unit,
+            "daily": "sunrise,sunset",
+            "timezone": datetime.datetime.now().astimezone().tzinfo,
+            "forecast_days": 1
         })
 
         data = response.json()
         weather_data = data.get("current", {})
+        
+        if datetime.datetime.fromisoformat(data["daily"]["sunrise"][0]).astimezone() < datetime.datetime.now().astimezone() < datetime.datetime.fromisoformat(data["daily"]["sunset"][0]).astimezone():
+            is_night = False
+        else:
+            is_night = True
+            
     except Exception as e:
         weather_data = {"error": str(e)}
     
@@ -164,7 +216,7 @@ if __name__ == "__main__":
         # Tkinter UI runs on main thread
         root = tk.Tk()
         root.title("Waveshare EPD Simulator")
-        img = draw()
+        img = Image.new("RGB", (250, 122), "white")
         photo = ImageTk.PhotoImage(img)
         label = tk.Label(root, image=photo)
         label.pack()
