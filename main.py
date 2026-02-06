@@ -102,7 +102,7 @@ is_night = False
 
 fnt_dejavu_12 = ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 12)
 
-fnt_dejavu_22= ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 16)
+fnt_dejavu_18= ImageFont.truetype(basedir + '/assets/fonts/dejavu_sans_mono.ttf', 18)
 
 def draw_text(image, text, x, y, halign, valign, font):
     draw = ImageDraw.Draw(image)
@@ -143,10 +143,10 @@ def draw():
             weather_thumbnail = weather_thumbnail.replace("day", "night")
         image.paste(Image.open(f"{basedir}/assets/weather_thumbnails/{weather_thumbnail}.bmp"), (10, 20))
         weather_str_left = f"{int(round(weather_data.get('temperature_2m', 'N/A')))}{temp_str}\n{int(round(weather_data.get('windspeed_10m', 'N/A')))} {wind_str}\n{weather_data.get('winddirection_10m', 'N/A')}°"
-        draw_text(image, weather_str_left, 92, 51, "left", "middle", fnt_dejavu_22)
+        draw_text(image, weather_str_left, 92, 51, "left", "middle", fnt_dejavu_18)
         
         weather_str_right = f"{int(round(weather_data.get('apparent_temperature', 'N/A')))}{temp_str}\n{int(round(weather_data.get('wind_gusts_10m', 'N/A')))} {wind_str}\n{int(round(weather_data.get('relative_humidity_2m', 'N/A')))}%"
-        draw_text(image, weather_str_right, 170, 51, "left", "middle", fnt_dejavu_22)
+        draw_text(image, weather_str_right, 170, 51, "left", "middle", fnt_dejavu_18)
         
         draw_text(image, f"Updated at {datetime.datetime.now().strftime('%m/%d %H:%M')}", 125, 120, "center", "bottom", fnt_dejavu_12)
         
