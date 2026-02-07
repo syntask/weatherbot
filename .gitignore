@@ -1,1 +1,13 @@
-*.DS_Store
+**.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+*.env
+.env.*
+venv/
+.venv/
+.idea/
+.vscode/
