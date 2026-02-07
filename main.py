@@ -38,6 +38,7 @@ def retry(max_attempts: int = 5, backoff_factor: float = 0.2, exceptions: Tuple[
 # A small wrapper around requests.get that will retry on request exceptions
 @retry(max_attempts=5, backoff_factor=0.2, exceptions=(requests.RequestException,))
 def _get(url, **kwargs):
+    print(f" Fetching {url} with params {kwargs.get('params', {})} at {datetime.datetime.now()}")
     return requests.get(url, **kwargs)
 
 def is_sim_mode() -> bool:
@@ -181,6 +182,7 @@ def tick():
             is_night = True
             
     except Exception as e:
+        print(f"Error fetching weather data: {e} at {datetime.datetime.now()}")
         weather_data = {"error": str(e)}
     
     buffer = draw()
